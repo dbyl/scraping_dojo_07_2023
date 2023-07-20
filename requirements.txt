@@ -1,0 +1,5 @@
+beautifulsoup4
+selenium
+environ
+html5lib
+python-dotenv
