@@ -9,7 +9,7 @@ import html5lib
 import traceback
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, date
-from typing import List, Union
+from typing import List, Union, Tuple
 from bs4 import BeautifulSoup
 from enum import Enum, IntEnum
 from collections import Counter
@@ -40,7 +40,7 @@ class ScrapWebpage:
         self.with_proxy = with_proxy
         self.start_page = start_page
 
-    def scrap_data(self) -> str:
+    def scrap_data(self) -> Tuple[BeautifulSoup, bool]:
         try:
             driver = self.proxy_activating()
             driver.set_window_size(1400,1000)
@@ -96,7 +96,7 @@ class ScrapWebpage:
             logging.info(f"No moge pages.")
             return flag
 
-    def go_through_all_pages_1(self) -> List[str]:
+    def go_through_all_pages(self) -> List[str]:
 
         try:
             flag = True
@@ -114,11 +114,11 @@ class ScrapWebpage:
             logging.warning(f"FAIL: {e}\n Tracking: {traceback.format_exc()}")
 
 
-    def save_to_json(self) -> json:
+    def save_to_json(self) -> None:
         
         all_quotes_list = list()
         with open(os.getenv("OUTPUT_FILE"), 'a') as f:
-            list_of_quotes = self.go_through_all_pages_1()
+            list_of_quotes = self.go_through_all_pages()
             for quotes in list_of_quotes:
                 for quote in quotes:
                     quote_obj = {'text': GetQuoteDetails(quote).get_text(), 
@@ -132,7 +132,7 @@ class ScrapWebpage:
     
 
 class GetQuotes:
-    
+
 
     def __init__(self, soup: str) -> None:
         self.soup = soup
@@ -151,14 +151,14 @@ class GetQuoteDetails:
     def __init__(self, quote: str) -> None:
         self.quote = quote
 
-    def get_author(self) -> List[str]:
+    def get_author(self) -> str:
         try:
             author = self.quote.find('small', class_='author').text
             return author 
         except Exception as e:
             logging.warning(f"Retrieving author failed: {e}\n Tracking: {traceback.format_exc()}")
 
-    def get_text(self) -> List[str]:
+    def get_text(self) -> str:
         try:
             text = self.quote.find('span', class_='text').text.strip("“”")
             return text
@@ -176,7 +176,6 @@ class GetQuoteDetails:
             logging.warning(f"Retrieving tags failed: {e}\n Tracking: {traceback.format_exc()}")
 
 
-output = ScrapWebpage(url).save_to_json()
-
-
-
+if __name__ == "__main__":
+    output = ScrapWebpage(url)
+    output.save_to_json()
