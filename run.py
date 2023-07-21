@@ -16,27 +16,32 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+
 from environment_config import CustomEnvironment
 
 
 url_to_scrap=CustomEnvironment.get_input_url()
 json_file=CustomEnvironment.get_output_file()
 proxy=CustomEnvironment.get_proxy()
-print(proxy)
-print(url_to_scrap)
-print(json_file)
+#print(proxy)
+#print(url_to_scrap)
+#print(json_file)
 
 
 class ScrapWebpage:
 
 
-    def __init__(self, url_to_scrap: str, to_json: bool=True) -> None:
+    def __init__(self, url_to_scrap: str, to_json: bool=True, with_proxy: bool=True) -> None:
         self.url_to_scrap = url_to_scrap
         self.to_json = to_json
+        self.with_proxy = with_proxy
 
     def scrap_data(self) -> str:
         try:
-            driver = webdriver.Chrome()
+            driver = self.proxy_activating()
+            #driver = webdriver.Chrome()
             driver.set_window_size(1400,1000)
             driver.get(self.url_to_scrap)
             element_selector = ".quote"
@@ -66,6 +71,21 @@ class ScrapWebpage:
                 json_object = json.dumps(q)
                 f.write(json_object + '\n')
 
+    def proxy_activating(self) -> None:
+        try:
+            if self.with_proxy == True:
+                PROXY = CustomEnvironment.get_proxy()
+                service = Service()
+                options = webdriver.ChromeOptions()
+                options.add_argument('--proxy-server=%s' % PROXY)
+                driver = webdriver.Chrome(service=service, options=options)
+                return driver
+            else:
+                driver = webdriver.Chrome()
+                return driver
+        except Exception as e:
+            logging.warning(f"Setting proxy up failed: {e}\n Tracking: {traceback.format_exc()}")
+
     def next_page(self):
         pass
 
@@ -86,7 +106,7 @@ class GetQuotes:
 #output = ScrapWebpage(url_to_scrap)
 #print(output.scrap_data())
 
-#soup = ScrapWebpage(url_to_scrap).save_to_json()
-#output = GetQuotes(soup).retrieve_quotes()
-#print(output)
+soup = ScrapWebpage(url_to_scrap).save_to_json()
+output = GetQuotes(soup).retrieve_quotes()
+print(output)
 
