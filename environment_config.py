@@ -22,7 +22,7 @@ class CustomEnvironment:
     @classmethod
     def get_input_url(cls) -> str:
         if cls._input_url is None:
-            raise ValueError("Input url is not provided.")        
+            raise ValueError("Input url is not provided.")
         return cls._input_url
 
     @classmethod
