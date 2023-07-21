@@ -1,7 +1,9 @@
 import sys
 import json
+import jsbeautifier
 import os
 import time
+import re
 import logging
 import html5lib
 import traceback
@@ -25,28 +27,30 @@ from requests.exceptions import ConnectionError, HTTPError, MissingSchema, ReadT
 from environment_config import CustomEnvironment
 
 
-url_to_scrap=CustomEnvironment.get_input_url()
+url=CustomEnvironment.get_input_url()
 json_file=CustomEnvironment.get_output_file()
 
 
 class ScrapWebpage:
 
 
-    def __init__(self, url_to_scrap: str, to_json: bool=False, with_proxy: bool=False) -> None:
-        self.url_to_scrap = url_to_scrap
+    def __init__(self, url: str, to_json: bool=False, with_proxy: bool=False, start_page: int=1) -> None:
+        self.url = url
         self.to_json = to_json
         self.with_proxy = with_proxy
+        self.start_page = start_page
 
     def scrap_data(self) -> str:
         try:
             driver = self.proxy_activating()
             driver.set_window_size(1400,1000)
-            driver.get(self.url_to_scrap)
-            self.wait_for_quotes(driver)
+            url_to_scrap = self.preparing_url()
+            driver.get(url_to_scrap)
+            flag = self.wait_for_quotes(driver)
             time.sleep(1)
             page = driver.page_source
             soup = BeautifulSoup(page, "html5lib")
-            return soup, driver
+            return soup, flag
         except ConnectionError as e:
             logging.warning(f"ConnectionError occured: {e}. \nTry again later")
         except MissingSchema as e:
@@ -55,6 +59,14 @@ class ScrapWebpage:
             logging.warning(f"HTTPError occured: {e}. \nMake sure that website url is valid")
         except ReadTimeout as e:
             logging.warning(f"ReadTimeout occured: {e}. \nTry again later")
+
+    def preparing_url(self):
+
+        try:
+            url_to_scrap = "".join([url, "page/", str(self.start_page)])
+            return url_to_scrap
+        except Exception as e:
+            logging.warning(f"Preparing url failed: {e}\n Tracking: {traceback.format_exc()}")
 
     def proxy_activating(self) -> None:
         try:
@@ -71,63 +83,61 @@ class ScrapWebpage:
         except Exception as e:
             logging.warning(f"Setting proxy up failed: {e}\n Tracking: {traceback.format_exc()}")
 
-    def wait_for_quotes(self, driver) -> None:
+    def wait_for_quotes(self, driver) -> bool():
         try:
             element_selector = ".quote"
             waiting_timeout = 15
             element_present = EC.presence_of_element_located((By.CSS_SELECTOR, element_selector))
             WebDriverWait(driver, waiting_timeout).until(element_present)
+            flag = True
+            return flag
         except Exception as e:
-            logging.warning(f"Wait for quotes failed: {e}\n Tracking: {traceback.format_exc()}")
+            flag = False
+            logging.info(f"No moge pages.")
+            return flag
+
+    def go_through_all_pages_1(self) -> List[str]:
+
+        try:
+            flag = True
+            retrived_quotes = list()
+            while flag:
+                soup, flag = self.scrap_data()
+                quotes = GetQuotes(soup).get_data()
+                retrived_quotes.append(quotes)
+                if soup.find('li',attrs={"class":"next"}) is None:
+                    flag = False
+                self.start_page += 1
+                
+            return retrived_quotes
+        except Exception as e:
+            logging.warning(f"FAIL: {e}\n Tracking: {traceback.format_exc()}")
 
 
     def save_to_json(self) -> json:
-
+        
+        all_quotes_list = list()
         with open(os.getenv("OUTPUT_FILE"), 'a') as f:
-            soup = self.scrap_data()
-            quotes = GetQuotes(soup).retrieve_quotes()
-            for q in quotes:
-                # Assuming each string is a valid JSON object
-                json_object = json.dumps(q)
-                f.write(json_object + '\n')
-
-    def next_page_if_exists(self, soup, driver) -> None:
-        #driver = self.proxy_activating()
-        try:
-            next_page_button = soup.find('li', {'class': 'next'})
-            if next_page_button:
-                flag = True
-                wait = WebDriverWait(driver, 2)
-                accept = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'next')))
-                actions = ActionChains(driver)
-                actions.move_to_element(accept).click().perform()
-
-                return flag
-            else:
-                logging.info("No more pages.")
-                flag = False
-                return flag
-        except Exception as e:
-            logging.warning(f"Looking for next page failed: {e}\n Tracking: {traceback.format_exc()}")
-
-
-    def go_through_all_pages(self) -> List[str]:
-        list_of_quotes = list()
-        flag = True
-
-        while flag==True:
-            soup, driver = self.scrap_data()
-            list_of_quotes.append(GetQuotes(soup).retrieve_quotes())
-            flag = self.next_page_if_exists(soup, driver)
-
-        return list_of_quotes
+            list_of_quotes = self.go_through_all_pages_1()
+            for quotes in list_of_quotes:
+                for quote in quotes:
+                    quote_obj = {'text': GetQuoteDetails(quote).get_text(), 
+                                'by': GetQuoteDetails(quote).get_author(),
+                                'tags': GetQuoteDetails(quote).get_tags()}
+                    options = jsbeautifier.default_options()
+                    options.indent_size = 4
+                    all_quotes_list.append(quote_obj)
+            json_object_better = jsbeautifier.beautify(json.dumps(all_quotes_list, separators=(", ", ": ")), options) 
+            f.write(json_object_better + '\n')
+    
 
 class GetQuotes:
+    
 
     def __init__(self, soup: str) -> None:
         self.soup = soup
 
-    def retrieve_quotes(self) -> str:
+    def get_data(self) -> str:
         try:
             quotes = self.soup.find_all('div', {"class":"quote"})
             return quotes
@@ -135,12 +145,38 @@ class GetQuotes:
             logging.warning(f"Retrieving quotes failed: {e}\n Tracking: {traceback.format_exc()}")
 
 
+class GetQuoteDetails:
 
-#output = ScrapWebpage(url_to_scrap)
-#print(output.scrap_data())
 
-#output = ScrapWebpage(url_to_scrap).scrap_data()
-output = ScrapWebpage(url_to_scrap).go_through_all_pages()
+    def __init__(self, quote: str) -> None:
+        self.quote = quote
 
-output
+    def get_author(self) -> List[str]:
+        try:
+            author = self.quote.find('small', class_='author').text
+            return author 
+        except Exception as e:
+            logging.warning(f"Retrieving author failed: {e}\n Tracking: {traceback.format_exc()}")
+
+    def get_text(self) -> List[str]:
+        try:
+            text = self.quote.find('span', class_='text').text.strip("“”")
+            return text
+        except Exception as e:
+            logging.warning(f"Retrieving text failed: {e}\n Tracking: {traceback.format_exc()}")
+    
+    def get_tags(self) -> List[str]:
+        try:
+            tags = self.quote.find('div', class_='tags').find_all('a')
+            tags_list = list()
+            for tag in tags:
+                tags_list.append(tag.text)
+            return tags_list
+        except Exception as e:
+            logging.warning(f"Retrieving tags failed: {e}\n Tracking: {traceback.format_exc()}")
+
+
+output = ScrapWebpage(url).save_to_json()
+
+
 

@@ -4,3 +4,4 @@ environ
 requests
 html5lib
 django-environ
+jsbeautifier
