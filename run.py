@@ -42,11 +42,11 @@ class ScrapWebpage:
             driver = self.proxy_activating()
             driver.set_window_size(1400,1000)
             driver.get(self.url_to_scrap)
-            #self.wait_for_quotes(driver)
+            self.wait_for_quotes(driver)
             time.sleep(1)
             page = driver.page_source
             soup = BeautifulSoup(page, "html5lib")
-            return soup
+            return soup, driver
         except ConnectionError as e:
             logging.warning(f"ConnectionError occured: {e}. \nTry again later")
         except MissingSchema as e:
@@ -91,29 +91,17 @@ class ScrapWebpage:
                 json_object = json.dumps(q)
                 f.write(json_object + '\n')
 
-    def next_page_if_exists(self) -> None:
-        driver = self.proxy_activating()
-
-        try:
-            wait = WebDriverWait(driver, 2)
-            accept = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'next')))
-            accept.click()
-        except Exception as e: 
-            logging.warning(f"Failed: {e}\n Tracking: {traceback.format_exc()}")
-        
-        """
+    def next_page_if_exists(self, soup, driver) -> None:
+        #driver = self.proxy_activating()
         try:
             next_page_button = soup.find('li', {'class': 'next'})
             if next_page_button:
                 flag = True
-                #driver.find_element(By.CSS_SELECTOR, '.next').click()
-                #next_page_button_element = driver.find_element(By.CLASS_NAME, 'next')
                 wait = WebDriverWait(driver, 2)
                 accept = wait.until(EC.element_to_be_clickable((By.CLASS_NAME, 'next')))
                 actions = ActionChains(driver)
                 actions.move_to_element(accept).click().perform()
-                #print(next_page_button_element)
-                #next_page_button.click()
+
                 return flag
             else:
                 logging.info("No more pages.")
@@ -121,16 +109,16 @@ class ScrapWebpage:
                 return flag
         except Exception as e:
             logging.warning(f"Looking for next page failed: {e}\n Tracking: {traceback.format_exc()}")
-    """
+
 
     def go_through_all_pages(self) -> List[str]:
         list_of_quotes = list()
         flag = True
 
         while flag==True:
-            soup = self.scrap_data()
+            soup, driver = self.scrap_data()
             list_of_quotes.append(GetQuotes(soup).retrieve_quotes())
-            flag = self.next_page_if_exists()
+            flag = self.next_page_if_exists(soup, driver)
 
         return list_of_quotes
 
@@ -151,7 +139,8 @@ class GetQuotes:
 #output = ScrapWebpage(url_to_scrap)
 #print(output.scrap_data())
 
+#output = ScrapWebpage(url_to_scrap).scrap_data()
 output = ScrapWebpage(url_to_scrap).go_through_all_pages()
-#output = GetQuotes(soup).go_through_all_pages()
+
 output
 
