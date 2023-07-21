@@ -16,11 +16,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from environment_config import CustomEnvironment
 
-load_dotenv()
 
-url_to_scrap=os.getenv("INPUT_URL")
-json_file=os.getenv("OUTPUT_FILE")
+url_to_scrap=CustomEnvironment.get_input_url()
+json_file=CustomEnvironment.get_output_file()
+proxy=CustomEnvironment.get_proxy()
+print(proxy)
+print(url_to_scrap)
+print(json_file)
 
 
 class ScrapWebpage:
@@ -82,6 +86,7 @@ class GetQuotes:
 #output = ScrapWebpage(url_to_scrap)
 #print(output.scrap_data())
 
-soup = ScrapWebpage(url_to_scrap).save_to_json()
+#soup = ScrapWebpage(url_to_scrap).save_to_json()
 #output = GetQuotes(soup).retrieve_quotes()
-print(output)
+#print(output)
+
